@@ -109,6 +109,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    if (import.meta.env.DEV) (window as unknown as { __map: MLMap }).__map = map; // debugging aid
 
     const syncCamera = () => {
       const p = map.getPitch();
@@ -212,6 +213,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
     <div ref={wrap} className="mapwrap" data-theme={props.theme}>
       <div ref={el} className="map" />
       <div className="sky" aria-hidden="true" />
+      <div className="tiltshift" aria-hidden="true"><i /><i /><i /></div>
     </div>
   );
 });

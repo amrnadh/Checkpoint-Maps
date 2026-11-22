@@ -31,7 +31,7 @@ Open the printed URL on your phone (same Wi-Fi; the server listens on your LAN).
 - `src/lib/game.ts` — all game rules: dish→cuisine map, collections, badges, streak, reward diff. Edit seed trails here.
 - `src/lib/geo.ts` — distance, GPS, H3 cell id per spot.
 - `src/lib/stickers.ts` — food categories (tile colour, glyph) and how a spot picks one.
-- `src/lib/mapTheme.ts` — the Colour, Satellite and Light map styles.
+- `src/lib/mapTheme.ts` — the Colour, Diorama, Satellite and Light map styles.
 - `src/lib/vt.ts` — View Transitions wrapper for page and card-to-spot morphs.
 - `src/lib/osm.ts` — nearby food spots from OpenStreetMap Overpass (with fallback servers).
 - `src/lib/db.ts` — IndexedDB stores mirroring the brief's data model (`spots`, `checkins`, `meta`).
@@ -45,4 +45,5 @@ Open the printed URL on your phone (same Wi-Fi; the server listens on your LAN).
 - Icons: [Phosphor Icons](https://phosphoricons.com) (MIT).
 - Fonts: Instrument Serif and Onest from Google Fonts (OFL).
 - Map: OpenFreeMap tiles, OpenStreetMap data.
+- Hill shading (Diorama style): AWS Terrain Tiles (Mapzen, open data).
 - Satellite: Esri World Imagery (Esri, Maxar, Earthstar Geographics). Fine for development and personal use; a public launch needs an ArcGIS account under Esri's terms, or a switch to another imagery provider such as MapTiler.

@@ -52,7 +52,7 @@ The plain white map read as too empty, so the map now comes in three styles, pic
 | Style | Look |
 |---|---|
 | **Colour** (default) | Neutral land `#F2F0EB`, parks `#B9E0A0`, water `#8EC9EE`, white main roads, pale gold motorways `#FFE7A3`. Land use is softly tinted. 3D buildings cool from ivory to lavender-blue as they rise (retuned Nov 2026: the first version read too orange) |
-| **Midnight** (premium) | Navy land `#131A2B`, deep teal water, champagne-gold motorways `#E6C27A` and dim-gold main roads, buildings glowing indigo `#3B4890` to violet `#B9A9F4` under a cool lilac light, a violet dusk sky. Pins get a soft halo |
+| **Diorama** (premium) | A tabletop miniature model, from the moodboard's Agra diorama and tilt-shift relief maps. Sage land `#CFD6A8`, teal water `#5F9DB3`, parks with clumps of model trees (a generated canopy pattern), hill shading from open elevation data, and cream-stone buildings `#F1EBDD` to `#BBA48E`. A hazy horizon, a tilt-shift blur at the top and bottom of the screen, and a soft vignette make the real city read like a model. Replaced Midnight, which the client rejected |
 | **Satellite** | Esri World Imagery under see-through roads and white labels with dark halos. 3D buildings are hidden because the photo already shows them |
 | **Light** | The original quiet daylight map: land `#F1F1EE`, water `#CDE2EC`, white buildings |
 
