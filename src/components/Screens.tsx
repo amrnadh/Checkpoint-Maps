@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowLeft, ArrowUpRight, CalendarBlank, Check, Compass, Cube, DotsThree, Fire, Heart, Link, MagnifyingGlass,
-  MapPin, MapTrifold, Medal, NavigationArrow, NotePencil, Path, Play, Plus, ShareNetwork, SquaresFour, X,
+  MapPin, MapTrifold, Medal, NavigationArrow, NotePencil, Path, Play, Plus, ShareNetwork, SquaresFour, StackSimple, X,
 } from '@phosphor-icons/react';
 import { RATING_LABEL, type GameState } from '../lib/game';
+import { MAP_THEMES, type MapTheme } from '../lib/mapTheme';
 import { blobUrl } from '../lib/image';
 import { stickerMeta, type StickerKey } from '../lib/stickers';
 import { platformLabel, thumbUrl } from '../lib/video';
@@ -58,9 +59,23 @@ export function Chips({ filter, counts, onFilter }: { filter: Filter; counts: Re
   );
 }
 
-export function MapControls({ is3D, bearing, onLocate, on3D, onNorth }: { is3D: boolean; bearing: number; onLocate(): void; on3D(): void; onNorth(): void }) {
+export function MapControls({ is3D, bearing, theme, onTheme, onLocate, on3D, onNorth }: {
+  is3D: boolean; bearing: number; theme: MapTheme; onTheme(t: MapTheme): void; onLocate(): void; on3D(): void; onNorth(): void;
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="mapctl">
+      {open && (
+        <div className="styles glass" role="radiogroup" aria-label="Map style">
+          {MAP_THEMES.map(({ id, label }) => (
+            <button key={id} role="radio" aria-checked={theme === id} className="style-opt" onClick={() => { onTheme(id); setOpen(false); }}>
+              <span className={`style-thumb is-${id}`} aria-hidden="true"><i /><i /><i /></span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button className="round glass" aria-label="Map style" aria-expanded={open} onClick={() => setOpen((o) => !o)}><StackSimple size={21} weight={open ? 'fill' : 'regular'} /></button>
       {Math.abs(bearing) > 3 && (
         <button className="round glass" aria-label="Point the map north" onClick={onNorth}>
           <span style={{ display: 'grid', transform: `rotate(${-bearing - 45}deg)` }}><Compass size={22} /></span>

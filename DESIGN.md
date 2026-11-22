@@ -43,7 +43,19 @@ We are **not** copying the 3D emoji pins or photoreal city. Icons are clean line
 | Mist | `#FFF2E9` / `#F3EDFB` / `#E8F3F1` | Page backgrounds (a soft three-stop gradient) |
 | Paper | `#FFFFFF` | Cards and sheets |
 
-Glass is white at 70% opacity with a 24 px blur and saturation 1.6. The map is quiet daylight: land `#F1F1EE`, water `#CDE2EC`, parks `#DCEBD2`, and white 3D buildings.
+Glass is white at 70% opacity with a 24 px blur and saturation 1.6.
+
+### Map styles (Nov 2026)
+
+The plain white map read as too empty, so the map now comes in three styles, picked from the layers button. The choice is remembered on the device.
+
+| Style | Look |
+|---|---|
+| **Colour** (default) | Warm land `#F4EEE3`, parks `#B5E09A`, woods `#93CE7E`, water `#86C5F0`, main roads `#FFE38F`, motorways `#FFB45E`. Land use is tinted too: commercial pink, schools butter, hospitals rose, industry lilac. 3D buildings shade from cream to peach to pink to lilac as they get taller |
+| **Satellite** | Esri World Imagery under see-through roads and white labels with dark halos. 3D buildings are hidden because the photo already shows them |
+| **Light** | The original quiet daylight map: land `#F1F1EE`, water `#CDE2EC`, white buildings |
+
+The sky gradient at the horizon follows the style. All theme values live in `src/lib/mapTheme.ts`.
 
 Each food category has its own pastel tile colour and a darker glyph colour (see `src/lib/stickers.ts`).
 

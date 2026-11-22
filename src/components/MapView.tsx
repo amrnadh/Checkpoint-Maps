@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Check, Play } from '@phosphor-icons/react';
 import { SpotImage } from './FoodIcon';
 import type { StickerKey } from '../lib/stickers';
+import { addThemeLayers, applyMapTheme, type MapTheme } from '../lib/mapTheme';
 import type { Home, LatLng, Spot } from '../lib/types';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
@@ -33,38 +34,7 @@ interface Props {
   onSpot(id: string): void;
   onBackground(): void;
   onCamera(bearing: number, pitch: number): void;
-}
-
-/** Quiet daylight base map (DESIGN.md › Colour). */
-const MAP = {
-  land: '#F1F1EE', water: '#CDE2EC', park: '#DCEBD2', road: '#FFFFFF', minor: '#FAFAF8', casing: '#E3E3DE',
-  building: '#FFFFFF', label: '#8A8794', strong: '#3B3644', rail: '#D8D8D2',
-};
-
-function restyle(map: MLMap) {
-  for (const l of map.getStyle().layers) {
-    const id = l.id;
-    try {
-      if (l.type === 'background') map.setPaintProperty(id, 'background-color', MAP.land);
-      else if (l.type === 'fill' && /^water/.test(id)) map.setPaintProperty(id, 'fill-color', MAP.water);
-      else if (l.type === 'fill' && /park|wood|landcover/.test(id)) map.setPaintProperty(id, 'fill-color', MAP.park);
-      else if (l.type === 'fill' && /landuse|aeroway|road_area/.test(id)) map.setPaintProperty(id, 'fill-color', MAP.land);
-      else if (l.type === 'fill' && id === 'building') map.setLayoutProperty(id, 'visibility', 'none');
-      else if (l.type === 'line' && /^waterway/.test(id)) map.setPaintProperty(id, 'line-color', MAP.water);
-      else if (l.type === 'line' && /casing/.test(id)) map.setPaintProperty(id, 'line-color', MAP.casing);
-      else if (l.type === 'line' && /major|motorway/.test(id)) map.setPaintProperty(id, 'line-color', MAP.road);
-      else if (l.type === 'line' && /highway|road|aeroway|pier/.test(id)) map.setPaintProperty(id, 'line-color', MAP.minor);
-      else if (l.type === 'line' && /rail/.test(id)) map.setPaintProperty(id, 'line-color', MAP.rail);
-      else if (l.type === 'line' && /boundary/.test(id)) map.setLayoutProperty(id, 'visibility', 'none');
-      else if (l.type === 'symbol') {
-        if (/shield|airport|poi/.test(id)) map.setLayoutProperty(id, 'visibility', 'none');
-        map.setPaintProperty(id, 'text-color', /label_(city|town|village|other)/.test(id) ? MAP.strong : MAP.label);
-        map.setPaintProperty(id, 'text-halo-color', MAP.land);
-      }
-    } catch {
-      /* layer lacks that paint prop */
-    }
-  }
+  theme: MapTheme;
 }
 
 /** A pin is a small framed picture with a pointer, like a photo pinned to the map. */
@@ -148,26 +118,9 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
 
     map.on('load', () => {
       if (cancelled) return;
-      const firstSymbol = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
-      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.26, position: [1.5, 190, 40] });
-      map.addLayer(
-        {
-          id: 'buildings-3d',
-          type: 'fill-extrusion',
-          source: 'openmaptiles',
-          'source-layer': 'building',
-          minzoom: 13,
-          paint: {
-            'fill-extrusion-color': MAP.building,
-            'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 14.5, ['coalesce', ['get', 'render_height'], 9]],
-            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.94,
-            'fill-extrusion-vertical-gradient': true,
-          },
-        },
-        firstSymbol,
-      );
-      restyle(map);
+      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.3, position: [1.5, 190, 40] });
+      addThemeLayers(map);
+      applyMapTheme(map, latest.current.theme);
       ready.current = true;
       sync();
       syncCamera();
@@ -230,6 +183,11 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
   useEffect(sync, [props.spots, props.selected]);
 
   useEffect(() => {
+    wrap.current?.setAttribute('data-theme', props.theme);
+    if (mapRef.current && ready.current) applyMapTheme(mapRef.current, props.theme);
+  }, [props.theme]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (!props.me) {
@@ -250,7 +208,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
   }, [props.home?.setAt]);
 
   return (
-    <div ref={wrap} className="mapwrap">
+    <div ref={wrap} className="mapwrap" data-theme={props.theme}>
       <div ref={el} className="map" />
       <div className="sky" aria-hidden="true" />
     </div>

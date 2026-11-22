@@ -15,6 +15,7 @@ import { drawShareCard, shareOrDownload, type ShareInput } from './lib/share';
 import { stickerFor } from './lib/stickers';
 import { thumbUrl } from './lib/video';
 import { transition } from './lib/vt';
+import type { MapTheme } from './lib/mapTheme';
 import type { CheckIn as CheckInT, Home, LatLng, Spot, SpotKind, Video } from './lib/types';
 
 const BOTTOM_UI = 300; // carousel + nav, so the camera centres spots above them
@@ -59,6 +60,22 @@ export default function App() {
   const [me, setMe] = useState<LatLng | null>(null);
   const [is3D, setIs3D] = useState(true);
   const [bearing, setBearing] = useState(-17);
+  const [mapTheme, setMapTheme] = useState<MapTheme>(() => {
+    try {
+      const t = localStorage.getItem('cp-map-theme');
+      return t === 'satellite' || t === 'light' || t === 'colour' ? t : 'colour';
+    } catch {
+      return 'colour';
+    }
+  });
+  const chooseTheme = (t: MapTheme) => {
+    setMapTheme(t);
+    try {
+      localStorage.setItem('cp-map-theme', t);
+    } catch {
+      /* private mode: keep it for this session only */
+    }
+  };
 
   const [checkingIn, setCheckingIn] = useState<{ preset: Spot | null } | null>(null);
   const [reward, setReward] = useState<{ diff: RewardDiff; spot: Spot; checkin: CheckInT } | null>(null);
@@ -300,6 +317,7 @@ export default function App() {
         selected={selected}
         me={me}
         bottomInset={BOTTOM_UI}
+        theme={mapTheme}
         onSpot={focusSpot}
         onBackground={() => setSelected(null)}
         onCamera={(b, p) => { setBearing(b); setIs3D(p > 15); }}
@@ -311,7 +329,7 @@ export default function App() {
             <TopBar query={query} onQuery={(q) => { setQuery(q); setSelected(null); }} onMenu={() => setMenu(true)} />
             {vms.length > 0 && <Chips filter={filter} counts={counts} onFilter={changeFilter} />}
           </div>
-          <MapControls is3D={is3D} bearing={bearing} onLocate={locateMe} on3D={() => mapRef.current?.set3D(!is3D)} onNorth={() => mapRef.current?.resetNorth()} />
+          <MapControls is3D={is3D} bearing={bearing} theme={mapTheme} onTheme={chooseTheme} onLocate={locateMe} on3D={() => mapRef.current?.set3D(!is3D)} onNorth={() => mapRef.current?.resetNorth()} />
           <Carousel
             items={shown}
             selected={selected}
