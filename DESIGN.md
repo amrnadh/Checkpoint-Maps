@@ -51,7 +51,8 @@ The plain white map read as too empty, so the map now comes in three styles, pic
 
 | Style | Look |
 |---|---|
-| **Colour** (default) | Warm land `#F4EEE3`, parks `#B5E09A`, woods `#93CE7E`, water `#86C5F0`, main roads `#FFE38F`, motorways `#FFB45E`. Land use is tinted too: commercial pink, schools butter, hospitals rose, industry lilac. 3D buildings shade from cream to peach to pink to lilac as they get taller |
+| **Colour** (default) | Neutral land `#F2F0EB`, parks `#B9E0A0`, water `#8EC9EE`, white main roads, pale gold motorways `#FFE7A3`. Land use is softly tinted. 3D buildings cool from ivory to lavender-blue as they rise (retuned Nov 2026: the first version read too orange) |
+| **Midnight** (premium) | Navy land `#131A2B`, deep teal water, champagne-gold motorways `#E6C27A` and dim-gold main roads, buildings glowing indigo `#3B4890` to violet `#B9A9F4` under a cool lilac light, a violet dusk sky. Pins get a soft halo |
 | **Satellite** | Esri World Imagery under see-through roads and white labels with dark halos. 3D buildings are hidden because the photo already shows them |
 | **Light** | The original quiet daylight map: land `#F1F1EE`, water `#CDE2EC`, white buildings |
 
@@ -66,11 +67,14 @@ Each food category has its own pastel tile colour and a darker glyph colour (see
 
 Scale (px): 44 / 34 / 26 / 20 / 17 / 15 / 13.
 
+## Food art
+
+Each food category has a bespoke **top-down plate illustration** (`src/lib/plates.ts`): a biryani handi, a dosa with chutneys, cutting chai with a rusk, filter coffee in a dabara, a momo steamer, a falooda bowl, a bakery bun, a burger with fries, a steel thali, pani puri on a leaf plate, latte art, and noodles. They're drawn in soft gradients with light from the top-left, like overhead food photography, with no outlines. They're used for map pins (round), card product shots (the plate bleeds off the card edge), tiles and the spot hero. Your own photo, or a creator's video frame, always replaces the plate when one exists.
+
 ## Icons
 
 **Phosphor**, one family throughout:
 - **Regular** weight for UI controls.
-- **Duotone** weight for food glyphs.
 - **Fill** weight only for small status badges (play, check).
 
 ## Layout

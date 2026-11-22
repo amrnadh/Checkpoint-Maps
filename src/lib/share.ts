@@ -1,7 +1,5 @@
 import { RATING_LABEL, type GameState } from './game';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { FoodGlyph } from '../components/FoodIcon';
+import { plateSvg } from './plates';
 import { stickerMeta, type StickerKey } from './stickers';
 import type { CheckIn, Spot } from './types';
 
@@ -43,7 +41,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLine
 }
 
 function loadGlyph(k: StickerKey): Promise<HTMLImageElement> {
-  const svg = renderToStaticMarkup(createElement(FoodGlyph, { k, size: 256 })).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+  const svg = plateSvg(k).replace('<svg ', '<svg width="360" height="360" ');
   return new Promise((res, rej) => {
     const img = new Image();
     img.onload = () => res(img);
@@ -77,7 +75,7 @@ async function drawSticker(ctx: CanvasRenderingContext2D, k: StickerKey, cx: num
   ctx.roundRect(-r, -r, side, side, r * 0.36);
   ctx.fillStyle = stickerMeta(k).tint;
   ctx.fill();
-  const s = r * 1.1;
+  const s = r * 1.7;
   ctx.drawImage(img, -s / 2, -s / 2, s, s);
   ctx.restore();
 }

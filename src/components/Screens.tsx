@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowLeft, ArrowUpRight, CalendarBlank, Check, Compass, Cube, DotsThree, Fire, Heart, Link, MagnifyingGlass,
-  MapPin, MapTrifold, Medal, NavigationArrow, NotePencil, Path, Play, Plus, ShareNetwork, SquaresFour, StackSimple, X,
+  MapTrifold, Medal, SealCheck, NavigationArrow, NotePencil, Path, Play, Plus, ShareNetwork, SquaresFour, StackSimple, X,
 } from '@phosphor-icons/react';
 import { RATING_LABEL, type GameState } from '../lib/game';
 import { MAP_THEMES, type MapTheme } from '../lib/mapTheme';
@@ -9,7 +9,7 @@ import { blobUrl } from '../lib/image';
 import { stickerMeta, type StickerKey } from '../lib/stickers';
 import { platformLabel, thumbUrl } from '../lib/video';
 import type { CheckIn, Spot, Video } from '../lib/types';
-import { FoodTile, SpotImage } from './FoodIcon';
+import { FoodTile, Plate, SpotImage } from './FoodIcon';
 
 export const fmtDate = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 export const fmtKm = (m: number) => (m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
@@ -90,26 +90,29 @@ export function MapControls({ is3D, bearing, theme, onTheme, onLocate, on3D, onN
 /* ───────── Map: card carousel (synced with pins) ───────── */
 
 function Tag({ vm }: { vm: SpotVM }) {
-  if (vm.state === 'collected') return <span className="tag is-lime"><Check size={12} weight="bold" /> Collected{vm.number ? `, no. ${vm.number}` : ''}</span>;
-  if (vm.creators.length) return <span className="tag is-hot"><Play size={11} weight="fill" /> {vm.creators[0]}</span>;
+  if (vm.state === 'collected') return <span className="tag is-lime"><SealCheck size={14} weight="fill" /> Collected{vm.number ? `, no. ${vm.number}` : ''}</span>;
+  if (vm.creators.length) return <span className="tag is-creator"><span className="tag-av">{initial(vm.creators[0])}</span>{vm.creators[0]}</span>;
   return <span className="tag">To try</span>;
 }
 
 export function SpotCard({ vm, hero, onOpen }: { vm: SpotVM; hero: boolean; onOpen(): void }) {
   const meta = stickerMeta(vm.sticker);
+  const vtn = { viewTransitionName: hero ? 'hero' : undefined } as CSSProperties;
   return (
-    <article className="scard" data-id={vm.spot.id}>
+    <article className={`scard ${vm.image ? 'is-photo' : 'is-plate'}`} data-id={vm.spot.id} style={{ '--tint': meta.tint } as CSSProperties}>
       <button className="scard-hit" onClick={onOpen} aria-label={`Open ${vm.spot.name}`} />
-      <span className="scard-media" style={{ viewTransitionName: hero ? 'hero' : undefined } as CSSProperties}>
-        <SpotImage src={vm.image} k={vm.sticker} className="scard-img" />
-      </span>
+      {vm.image ? (
+        <span className="scard-media" style={vtn}><SpotImage src={vm.image} k={vm.sticker} className="scard-img" /></span>
+      ) : (
+        <span className="scard-plate" style={vtn}><Plate k={vm.sticker} size={168} /></span>
+      )}
       <span className="scard-shade" />
       <div className="scard-top"><Tag vm={vm} /></div>
       <div className="scard-body">
         <h3>{vm.spot.name}</h3>
-        <p><MapPin size={14} weight="fill" /> {[meta.label, vm.distance != null ? fmtKm(vm.distance) : null].filter(Boolean).join(', ')}</p>
+        <p>{meta.label}{vm.distance != null ? <><span className="sep" aria-hidden="true" />{fmtKm(vm.distance)} away</> : null}</p>
       </div>
-      <span className="scard-go" aria-hidden="true"><ArrowUpRight size={20} /></span>
+      <span className="scard-go" aria-hidden="true"><ArrowUpRight size={20} weight="bold" /></span>
     </article>
   );
 }
@@ -240,7 +243,7 @@ export function SpotPage({ vm, onBack, onCheckIn, onPlay }: { vm: SpotVM; onBack
                 const th = thumbUrl(v);
                 return (
                   <button key={v.id} className="vitem" onClick={() => onPlay(v)}>
-                    <span className="vthumb">{th ? <img src={th} alt="" /> : <span className="avatar">{initial(v.creator)}</span>}<span className="vplay"><Play size={12} weight="fill" /></span></span>
+                    <span className="vthumb" style={{ background: stickerMeta(vm.sticker).tint }}>{th ? <img src={th} alt="" /> : <Plate k={vm.sticker} size={50} />}<span className="vplay"><Play size={12} weight="fill" /></span></span>
                     <span className="vtext"><b>{v.title || 'Watch the video'}</b><small>{v.creator}, {platformLabel(v)}</small></span>
                   </button>
                 );

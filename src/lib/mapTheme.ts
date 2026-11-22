@@ -4,10 +4,11 @@ import type { Map as MLMap, ExpressionSpecification } from 'maplibre-gl';
  * Map looks (DESIGN.md › Map). The base is OpenFreeMap's Positron vector style, re-inked per theme,
  * plus our own land-use, land-cover and 3D-building layers so the city reads in colour.
  */
-export type MapTheme = 'colour' | 'satellite' | 'light';
+export type MapTheme = 'colour' | 'midnight' | 'satellite' | 'light';
 
 export const MAP_THEMES: { id: MapTheme; label: string }[] = [
   { id: 'colour', label: 'Colour' },
+  { id: 'midnight', label: 'Midnight' },
   { id: 'satellite', label: 'Satellite' },
   { id: 'light', label: 'Light' },
 ];
@@ -24,13 +25,23 @@ interface Palette {
 }
 
 const COLOUR: Palette = {
-  land: '#F4EEE3', water: '#86C5F0', park: '#B5E09A', wood: '#93CE7E', sand: '#F5E3AE', farm: '#E3EDB9',
-  residential: '#F0E6D6', commercial: '#F9DED6', industrial: '#E6E0F4', hospital: '#FCD5DD', school: '#FFEDB8', stadium: '#CBEBC0',
-  motorway: '#FFB45E', motorwayCase: '#E08A33', major: '#FFE38F', majorCase: '#EEC968', minor: '#FFFFFF', minorCase: '#E3D7C4', rail: '#C3B8D6',
-  label: '#6E6152', strong: '#33283D', halo: '#FFFFFF', roadLabel: '#7A6A55',
-  // Buildings warm up and turn lilac as they get taller.
-  buildings: ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8], 0, '#F7E8D6', 12, '#F6D8C4', 30, '#EFC4D2', 70, '#CDBCEE', 150, '#A9B7F0'],
+  land: '#F2F0EB', water: '#8EC9EE', park: '#B9E0A0', wood: '#97CC84', sand: '#F2E6C2', farm: '#E2EDC0',
+  residential: '#EEEBE4', commercial: '#F6E4E8', industrial: '#E6E3F3', hospital: '#F9DCE3', school: '#F4EED2', stadium: '#CBEBC0',
+  motorway: '#FFE7A3', motorwayCase: '#E3C676', major: '#FFFFFF', majorCase: '#DCD6C8', minor: '#FFFFFF', minorCase: '#E6E1D6', rail: '#C9C3D8',
+  label: '#6B6672', strong: '#2F2A38', halo: '#FFFFFF', roadLabel: '#7A7480',
+  // Buildings cool from ivory to lavender-blue as they get taller.
+  buildings: ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8], 0, '#F6F3EE', 12, '#ECE9F2', 30, '#DEDDF3', 70, '#C9D4F1', 150, '#B2C5EF'],
   buildingOpacity: 0.96,
+};
+
+/** Premium night look: navy city, champagne-gold arteries, buildings glowing indigo to violet. */
+const MIDNIGHT: Palette = {
+  land: '#131A2B', water: '#0C2C47', park: '#163129', wood: '#142C25', sand: '#262A33', farm: '#18241F',
+  residential: '#161D30', commercial: '#1D1B34', industrial: '#191D30', hospital: '#22182D', school: '#1C2134', stadium: '#163129',
+  motorway: '#E6C27A', motorwayCase: '#8A6C38', major: '#8A7550', majorCase: '#2A2840', minor: '#2C3456', minorCase: '#1A2136', rail: '#383E5A',
+  label: '#8D98B8', strong: '#ECEDF6', halo: '#0E1424', roadLabel: '#7F8AAA',
+  buildings: ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 8], 0, '#2E3A68', 12, '#3B4890', 30, '#5361BC', 70, '#7E80DC', 150, '#B9A9F4'],
+  buildingOpacity: 0.93,
 };
 
 const LIGHT: Palette = {
@@ -104,10 +115,14 @@ function vis(map: MLMap, id: string, on: boolean) {
 
 export function applyMapTheme(map: MLMap, theme: MapTheme) {
   const sat = theme === 'satellite';
-  const p = theme === 'light' ? LIGHT : COLOUR;
+  const p = theme === 'light' ? LIGHT : theme === 'midnight' ? MIDNIGHT : COLOUR;
+  map.setLight(theme === 'midnight'
+    ? { anchor: 'viewport', color: '#E4DEFF', intensity: 0.28, position: [1.4, 210, 35] }
+    : { anchor: 'viewport', color: '#ffffff', intensity: 0.3, position: [1.5, 190, 40] });
 
   vis(map, 'satellite', sat);
   vis(map, 'cp-landuse', !sat && theme !== 'light');
+  set(map, 'cp-landcover', 'fill-opacity', theme === 'midnight' ? 1 : 0.9);
   vis(map, 'cp-landcover', !sat);
   vis(map, 'buildings-3d', !sat); // the photo already shows the buildings
   set(map, 'cp-landuse', 'fill-color', landuseColor(p));

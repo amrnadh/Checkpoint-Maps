@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Check, Play } from '@phosphor-icons/react';
-import { SpotImage } from './FoodIcon';
+import { Plate } from './FoodIcon';
 import type { StickerKey } from '../lib/stickers';
 import { addThemeLayers, applyMapTheme, type MapTheme } from '../lib/mapTheme';
 import type { Home, LatLng, Spot } from '../lib/types';
@@ -37,18 +37,19 @@ interface Props {
   theme: MapTheme;
 }
 
-/** A pin is a small framed picture with a pointer, like a photo pinned to the map. */
+/** A pin is a round disc: your photo or the creator's frame if we have one, otherwise the spot's plate. */
 function Pin({ s, selected }: { s: MapSpot; selected: boolean }) {
   return (
     <>
-      <span className="pin-frame">
-        <SpotImage src={s.image} k={s.sticker} className="pin-img" />
+      <span className="pin-disc">
+        {s.image ? <img className="pin-photo" src={s.image} alt="" draggable={false} /> : <Plate k={s.sticker} className="pin-plate" />}
         {s.state === 'collected' ? (
           <span className="pin-badge is-collected"><Check size={10} weight="bold" /></span>
         ) : s.videos > 0 ? (
-          <span className="pin-badge is-reel"><Play size={9} weight="fill" /></span>
+          <span className="pin-badge is-reel"><Play size={8} weight="fill" /></span>
         ) : null}
       </span>
+      <span className="pin-ground" aria-hidden="true" />
       <span className="pin-label" aria-hidden={!selected}>{s.name}</span>
     </>
   );

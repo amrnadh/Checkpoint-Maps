@@ -63,7 +63,7 @@ export default function App() {
   const [mapTheme, setMapTheme] = useState<MapTheme>(() => {
     try {
       const t = localStorage.getItem('cp-map-theme');
-      return t === 'satellite' || t === 'light' || t === 'colour' ? t : 'colour';
+      return t === 'satellite' || t === 'light' || t === 'colour' || t === 'midnight' ? t : 'colour';
     } catch {
       return 'colour';
     }
