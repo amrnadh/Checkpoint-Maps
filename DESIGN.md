@@ -1,74 +1,82 @@
-# CheckPoint design system
+# CheckPoint design system (v3)
 
 ## What we're designing
 
-A map of the food spots worth the trip in your city, mostly ones you saw in a creator's reel. You eat there and the spot turns into a sticker on your map. The audience is food people who chase famous and iconic places, not people who want to visit every stall. The app's main job is to make your next plate feel close and your past plates feel collected.
+A map of the food spots worth the trip in your city, mostly ones you saw in a creator's reel. You eat there and the spot joins your collection. The audience is food people who chase famous and iconic places. The app's main job is to make the next plate feel close and the past plates feel collected.
 
-## The idea in one line
+## What the moodboard says (Nov 2026)
 
-**A daylight street map with a sticker book on top.** The map is calm, light and quiet, like Apple Maps. The food stickers are the only loud thing on it.
+| Pattern from the references | What we take |
+|---|---|
+| Soft pastel colour behind content instead of flat white (ride app, real estate, laundry) | A "mist" background (peach, lilac, mint) on every page except the map |
+| Full-bleed map with glass controls floating on top (haven, 3D city) | The map is the home screen. Search, filters, cards and nav float over it on frosted glass |
+| Map pins made from images, with a dark label pill under the selected one and a lime ring (haven) | Pins are small framed tiles showing your photo, the creator's video frame or a food glyph. The selected pin gets a lime ring and a dark name pill |
+| Filter chips with counts (3D city) | All, To try, Collected and From reels, each with a count |
+| A hero card at the bottom with a photo, tag, heart and arrow (haven) | A swipeable card carousel synced with the pins: swipe a card and the map follows, tap a pin and the card scrolls in |
+| A floating pill nav bar with the selected tab as a solid pill, plus a separate round action (haven, real estate) | Map, Collection, Diary in a glass pill, plus a round black "I ate here" button |
+| Black pill as the primary action, outline pill as the secondary (welcome, ride, laundry) | One black primary per screen and an outline secondary, nothing else competing |
+| Big confident numbers for stats (real estate, laundry) | Collection stats are big numbers with small labels |
+| Selectable option cards with a highlighted border and gradient tags (ride) | The check-in rating is three option cards, and the selected one gets the gradient border |
+| A timeline for history (laundry tracking) | The diary is a timeline |
+| A serif display headline (haven) | Instrument Serif for page titles and spot names |
+
+We are **not** copying the 3D emoji pins or photoreal city. Icons are clean line and duotone glyphs from one family.
 
 ## Principles
 
-1. **The map defers, the food speaks.** The base map has low contrast and few colours, so the illustrated stickers are the only saturated objects on screen. Apple calls this *deference*: chrome never competes with content.
-2. **Collect places, not territory.** Progress is the spots you've eaten at and the trails you're finishing. We never show percentages of an area or ask people to cover ground. One iconic biryani counts for more than ten random stalls.
-3. **One loud moment.** The only choreographed motion is the sticker landing on the map after a check-in. Everything else moves only when you touch it: sheets follow your finger, buttons respond.
-4. **Depth means hierarchy.** We follow Apple's layering: map, then floating controls, then the bottom sheet, then modal sheets. Shadows and blur show which layer you're on, not decoration.
-5. **Say it plainly.** We use sentence case and plain verbs ("Check in", "Add a video", "Go"). No all-caps labels or labels above every heading, and no jargon like "hex" or "trail progress widget".
-6. **Thumb-first.** Primary actions sit in the bottom third. Touch targets are at least 44 pt. The sheet has three heights: peek, half and full.
+1. **The map is home.** Everything starts on the map, and every page slides over it and back.
+2. **Pictures over dots.** A spot shows the best picture we have: your photo, then the creator's video frame, then a food glyph on its category colour.
+3. **Glass for controls, paper for content.** Floating controls are frosted glass. Reading surfaces (pages, sheets) are solid and calm.
+4. **One black button.** Each screen has a single primary action as a black pill. Everything else is quieter.
+5. **Motion shows where things went.** A card grows into the spot page, the nav pill slides to the chosen tab, and check-in steps slide sideways. The only celebration is the reward screen. Reduced-motion settings are respected.
+6. **Collect places, not territory.** We never show "% explored". Progress means spots, trails, dishes and badges.
+7. **Plain words.** Sentence case, no all-caps labels, and buttons that say what happens.
 
 ## Colour
 
-The palette borrows from a South Indian meal: a banana leaf, a turmeric stain, a chilli, a steel tumbler.
-
 | Token | Hex | Role |
 |---|---|---|
-| Leaf | `#1E7A4C` | Brand and primary action ("I ate here", "Check in") |
-| Turmeric | `#F2B01E` | Collected: sticker rims, earned badges, trail fill |
-| Chilli | `#E0452B` | To try: creator-video spots, play buttons |
-| Ink | `#16222C` | Primary text, sticker outlines |
-| Steel | `#64717D` | Secondary text |
-| Tumbler | `#EEF1F3` | Grouped backgrounds, inset lists |
+| Ink | `#17131F` | Text, primary buttons, selected nav pill, dark label pill |
+| Smoke | `#6E6879` | Secondary text |
+| Lime | `#D4F36A` | Selected and collected: pin ring, collected tag, check badge |
+| Masala gradient | `#FF9F43` → `#FF5A5F` | To try and from reels: tags, play badges, the rating card border |
+| Mist | `#FFF2E9` / `#F3EDFB` / `#E8F3F1` | Page backgrounds (a soft three-stop gradient) |
+| Paper | `#FFFFFF` | Cards and sheets |
 
-Surfaces are white. The map uses its own muted set so the stickers stay saturated: land `#F3F4EF`, water `#B9DCEB`, parks `#D6E9C6`, roads white with `#E2E4DC` edges, and white 3D buildings shaded by light.
+Glass is white at 70% opacity with a 24 px blur and saturation 1.6. The map is quiet daylight: land `#F1F1EE`, water `#CDE2EC`, parks `#DCEBD2`, and white 3D buildings.
 
-Light only for now. The map is the product, and a dark map hides the stickers (an earlier version was rejected as too dark).
+Each food category has its own pastel tile colour and a darker glyph colour (see `src/lib/stickers.ts`).
 
 ## Type
 
-- **Caprasimo** (display): spot names, sheet titles, sticker captions. Its chunky, rounded letters echo hand-painted shop signboards. Never smaller than 17 px.
-- **System UI** (`-apple-system`, SF Pro): everything else. It's native on iPhone, and it reads clearly at small sizes.
+- **Instrument Serif** for page titles, spot names, big numbers and the greeting. It's editorial and warm, the way a food guide reads. Never below 22 px.
+- **Onest** for all UI text. It's geometric, clear and slightly friendly. Weights 400, 500, 600 and 700.
 
-Type scale (px): 34 / 24 / 20 / 17 / 15 / 13. Body text is 15 or 17 with line-height 1.4. Weights are 400, 600 and 700 only.
+Scale (px): 44 / 34 / 26 / 20 / 17 / 15 / 13.
+
+## Icons
+
+**Phosphor**, one family throughout:
+- **Regular** weight for UI controls.
+- **Duotone** weight for food glyphs.
+- **Fill** weight only for small status badges (play, check).
 
 ## Layout
 
 ```
-┌───────────────────────────┐
-│ (12 collected)    [◎][3D] │  floating glass controls
-│                           │
-│     3D street map         │
-│   🍛 sticker   ◌ to try   │
-│                           │
-├───────── ▬▬ ──────────────┤  bottom sheet (peek / half / full)
-│ [ I ate here           ]  │
-│ Explore │ Collection │ Diary
-│ …                         │
-└───────────────────────────┘
+┌───────────────────────────────┐
+│ ( search spots, dishes…  ) (⋯)│  glass
+│ [All 12] [To try 5] [Collected]│  chips with counts
+│                               │
+│     map · tile pins           │
+│        ▣ selected             │
+│     ┌Name pill┐               │
+│ ┌──────────────────┐ ┌───     │  card carousel (snap)
+│ │ image   tag      │ │        │
+│ │ Name        (→)  │ │        │
+│ └──────────────────┘ └───     │
+│ ( ●Map  Collection  Diary ) (+)│  floating nav + check-in
+└───────────────────────────────┘
 ```
 
-- **Sheet content is left-aligned.** Lists are Apple-style inset groups (one rounded group, hairlines between rows), not a stack of separate cards.
-- **Tapping a spot replaces the sheet content** with that spot's detail, with a back button, the way Apple Maps does. It doesn't open another floating card.
-- **Stickers are the only rotated or shadowed objects on the map.**
-
-## Stickers
-
-These are hand-built SVG illustrations (`src/lib/stickers.ts`), each on a tinted disc with an ink outline:
-
-dosa · biryani handi · cutting chai · filter coffee · momos · ice cream · bakery bun · burger · banana-leaf meal · street cart · café cup · noodles
-
-| State | Look |
-|---|---|
-| Collected | Full colour, a thick white rim and a turmeric ring, tilted a few degrees, with a soft drop shadow |
-| To try | Faded illustration, a dashed chilli ring, and a small play badge when a video features it |
-| Pick | Chosen from what you ate (latest dishes), falling back to the spot type |
+Pages (spot, collection, diary) are full-screen over the map, with a mist background and a back button. Content is left-aligned.

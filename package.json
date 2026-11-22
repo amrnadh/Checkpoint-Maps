@@ -10,6 +10,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.7",
     "h3-js": "^4.1.0",
     "idb": "^8.0.0",
     "maplibre-gl": "^4.7.1",

@@ -1,5 +1,8 @@
 import { RATING_LABEL, type GameState } from './game';
-import { stickerMeta, stickerSvg, tiltFor, type StickerKey } from './stickers';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { FoodGlyph } from '../components/FoodIcon';
+import { stickerMeta, type StickerKey } from './stickers';
 import type { CheckIn, Spot } from './types';
 
 /**
@@ -8,13 +11,13 @@ import type { CheckIn, Spot } from './types';
  */
 const W = 1080;
 const H = 1350;
-const C = { paper: '#FFFFFF', ground: '#F3F4EF', ink: '#16222C', steel: '#64717D', leaf: '#1E7A4C', turmeric: '#F2B01E' };
-const DISPLAY = 'Caprasimo, Georgia, serif';
-const BODY = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+const C = { paper: '#FFFFFF', ground: '#F3EDFB', ink: '#17131F', steel: '#6E6879', leaf: '#17131F', turmeric: '#D4F36A' };
+const DISPLAY = '"Instrument Serif", Georgia, serif';
+const BODY = 'Onest, -apple-system, system-ui, sans-serif';
 
 async function ensureFonts() {
   try {
-    await document.fonts.load(`400 80px ${DISPLAY}`);
+    await Promise.all([document.fonts.load(`400 80px ${DISPLAY}`), document.fonts.load(`600 34px ${BODY}`)]);
   } catch {
     /* falls back to Georgia */
   }
@@ -39,8 +42,8 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLine
   return lines;
 }
 
-function loadSvg(k: StickerKey): Promise<HTMLImageElement> {
-  const svg = stickerSvg(k).replace('<svg ', '<svg width="256" height="256" ');
+function loadGlyph(k: StickerKey): Promise<HTMLImageElement> {
+  const svg = renderToStaticMarkup(createElement(FoodGlyph, { k, size: 256 })).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
   return new Promise((res, rej) => {
     const img = new Image();
     img.onload = () => res(img);
@@ -49,28 +52,32 @@ function loadSvg(k: StickerKey): Promise<HTMLImageElement> {
   });
 }
 
-/** A sticker as it appears on the map: tinted disc, thick white rim, turmeric ring, soft shadow, slight tilt. */
+const tiltFor = (id: string) => {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return ((h % 9) - 4) * 1.2;
+};
+
+/** A category tile as it appears in the app: pastel rounded square, duotone glyph, white frame, soft shadow. */
 async function drawSticker(ctx: CanvasRenderingContext2D, k: StickerKey, cx: number, cy: number, r: number, tiltDeg: number) {
-  const img = await loadSvg(k);
+  const img = await loadGlyph(k);
+  const side = r * 2;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate((tiltDeg * Math.PI) / 180);
-  ctx.shadowColor = 'rgba(22,34,44,.22)';
-  ctx.shadowBlur = r * 0.25;
-  ctx.shadowOffsetY = r * 0.1;
+  ctx.shadowColor = 'rgba(23,19,31,.18)';
+  ctx.shadowBlur = r * 0.3;
+  ctx.shadowOffsetY = r * 0.12;
   ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.roundRect(-r - r * 0.08, -r - r * 0.08, side + r * 0.16, side + r * 0.16, r * 0.42);
   ctx.fillStyle = '#fff';
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.lineWidth = r * 0.06;
-  ctx.strokeStyle = C.turmeric;
-  ctx.stroke();
   ctx.beginPath();
-  ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+  ctx.roundRect(-r, -r, side, side, r * 0.36);
   ctx.fillStyle = stickerMeta(k).tint;
   ctx.fill();
-  const s = r * 1.5;
+  const s = r * 1.1;
   ctx.drawImage(img, -s / 2, -s / 2, s, s);
   ctx.restore();
 }
@@ -94,10 +101,13 @@ export async function drawShareCard(input: ShareInput): Promise<Blob> {
   const pad = 88;
   ctx.fillStyle = C.paper;
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = C.ground;
-  ctx.beginPath();
-  ctx.ellipse(W / 2, 560, 500, 360, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Mist background (DESIGN.md › Colour)
+  const mist = ctx.createLinearGradient(0, 0, W, H);
+  mist.addColorStop(0, '#FFF2E9');
+  mist.addColorStop(0.55, '#F3EDFB');
+  mist.addColorStop(1, '#E8F3F1');
+  ctx.fillStyle = mist;
+  ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
 
   if (input.kind === 'checkin' && input.spot && input.checkin && input.sticker) {
@@ -123,7 +133,7 @@ export async function drawShareCard(input: ShareInput): Promise<Blob> {
       await drawSticker(ctx, input.sticker, W / 2, 540, 270, tiltFor(spot.id));
     }
     ctx.fillStyle = C.ink;
-    ctx.font = `400 84px ${DISPLAY}`;
+    ctx.font = `400 96px ${DISPLAY}`;
     let y = 990;
     for (const l of wrap(ctx, spot.name, W - pad * 2, 2)) {
       ctx.fillText(l, W / 2, y);
@@ -134,7 +144,7 @@ export async function drawShareCard(input: ShareInput): Promise<Blob> {
     const sub = [checkin.dishes.slice(0, 2).join(' and '), RATING_LABEL[checkin.rating]].filter(Boolean).join('. ');
     ctx.fillText(wrap(ctx, sub, W - pad * 2, 1)[0] ?? '', W / 2, y + 2);
     ctx.fillStyle = C.leaf;
-    ctx.font = `700 34px ${BODY}`;
+    ctx.font = `600 34px ${BODY}`;
     ctx.fillText(input.number ? `No. ${input.number} in my CheckPoint collection` : 'From my CheckPoint diary', W / 2, H - 70);
   } else {
     const list = (input.stickers ?? []).slice(-7);
@@ -147,13 +157,13 @@ export async function drawShareCard(input: ShareInput): Promise<Blob> {
       await drawSticker(ctx, list[list.length - 1 - i], x, y, r, (i % 2 ? 1 : -1) * (4 + i));
     }
     ctx.fillStyle = C.ink;
-    ctx.font = `400 120px ${DISPLAY}`;
+    ctx.font = `400 140px ${DISPLAY}`;
     ctx.fillText(`${input.state.spotsVisited} ${input.state.spotsVisited === 1 ? 'spot' : 'spots'}`, W / 2, 1110);
     ctx.fillStyle = C.steel;
     ctx.font = `500 40px ${BODY}`;
     ctx.fillText(`${input.state.dishes.length} dishes, ${input.state.seenOn} from creators’ videos`, W / 2, 1180);
     ctx.fillStyle = C.leaf;
-    ctx.font = `700 34px ${BODY}`;
+    ctx.font = `600 34px ${BODY}`;
     ctx.fillText('My CheckPoint collection', W / 2, H - 70);
   }
 

@@ -1,20 +1,24 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
+import { createRoot, type Root } from 'react-dom/client';
+import maplibregl, { type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { stickerMeta, stickerSvg, tiltFor, type StickerKey } from '../lib/stickers';
+import { Check, Play } from '@phosphor-icons/react';
+import { SpotImage } from './FoodIcon';
+import type { StickerKey } from '../lib/stickers';
 import type { Home, LatLng, Spot } from '../lib/types';
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 const DEFAULT_CENTER: [number, number] = [77.5946, 12.9716]; // Bengaluru, until a home is set
-const PITCH_3D = 55;
-const LABEL_ZOOM = 14.6;
+const PITCH_3D = 52;
+const LABEL_ZOOM = 14.8;
 
-export type MapSpot = Spot & { visits: number; state: 'collected' | 'totry'; videos: number; sticker: StickerKey };
+export type MapSpot = Spot & { visits: number; state: 'collected' | 'totry'; videos: number; sticker: StickerKey; image: string | null };
 
 export interface MapHandle {
   center(): LatLng;
   flyTo(p: LatLng, zoom?: number): void;
-  celebrate(spotId: string, at: LatLng): void;
+  fit(points: LatLng[]): void;
+  celebrate(at: LatLng): void;
   set3D(on: boolean): void;
   resetNorth(): void;
 }
@@ -24,14 +28,17 @@ interface Props {
   spots: MapSpot[];
   selected: string | null;
   me: LatLng | null;
+  /** Pixels at the bottom covered by floating UI, so the camera centres spots above it. */
+  bottomInset: number;
   onSpot(id: string): void;
+  onBackground(): void;
   onCamera(bearing: number, pitch: number): void;
 }
 
-/** Daylight base map (DESIGN.md › Colour): quiet and low-contrast so the stickers carry the colour. */
+/** Quiet daylight base map (DESIGN.md › Colour). */
 const MAP = {
-  land: '#F3F4EF', water: '#B9DCEB', park: '#D6E9C6', road: '#FFFFFF', minor: '#FBFBF8', casing: '#E2E4DC',
-  building: '#FFFFFF', label: '#7D8790', strong: '#3A4651', rail: '#D3D6CE',
+  land: '#F1F1EE', water: '#CDE2EC', park: '#DCEBD2', road: '#FFFFFF', minor: '#FAFAF8', casing: '#E3E3DE',
+  building: '#FFFFFF', label: '#8A8794', strong: '#3B3644', rail: '#D8D8D2',
 };
 
 function restyle(map: MLMap) {
@@ -50,7 +57,7 @@ function restyle(map: MLMap) {
       else if (l.type === 'line' && /rail/.test(id)) map.setPaintProperty(id, 'line-color', MAP.rail);
       else if (l.type === 'line' && /boundary/.test(id)) map.setLayoutProperty(id, 'visibility', 'none');
       else if (l.type === 'symbol') {
-        if (/shield|airport/.test(id)) map.setLayoutProperty(id, 'visibility', 'none');
+        if (/shield|airport|poi/.test(id)) map.setLayoutProperty(id, 'visibility', 'none');
         map.setPaintProperty(id, 'text-color', /label_(city|town|village|other)/.test(id) ? MAP.strong : MAP.label);
         map.setPaintProperty(id, 'text-halo-color', MAP.land);
       }
@@ -60,28 +67,21 @@ function restyle(map: MLMap) {
   }
 }
 
-function stickerEl(s: MapSpot) {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'pin';
-  el.setAttribute('aria-label', s.name);
-  el.innerHTML = `<span class="pin-disc"><span class="pin-art"></span><span class="pin-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg></span></span><span class="pin-name"></span>`;
-  return el;
-}
-
-function paint(el: HTMLElement, s: MapSpot, selected: boolean) {
-  el.dataset.state = s.state;
-  el.dataset.sticker = s.sticker;
-  el.classList.toggle('is-selected', selected);
-  el.classList.toggle('has-video', s.videos > 0);
-  el.style.setProperty('--tilt', `${tiltFor(s.id)}deg`);
-  el.style.setProperty('--tint', stickerMeta(s.sticker).tint);
-  const art = el.querySelector('.pin-art')!;
-  if (art.getAttribute('data-k') !== s.sticker) {
-    art.innerHTML = stickerSvg(s.sticker);
-    art.setAttribute('data-k', s.sticker);
-  }
-  el.querySelector('.pin-name')!.textContent = s.name;
+/** A pin is a small framed picture with a pointer, like a photo pinned to the map. */
+function Pin({ s, selected }: { s: MapSpot; selected: boolean }) {
+  return (
+    <>
+      <span className="pin-frame">
+        <SpotImage src={s.image} k={s.sticker} className="pin-img" />
+        {s.state === 'collected' ? (
+          <span className="pin-badge is-collected"><Check size={10} weight="bold" /></span>
+        ) : s.videos > 0 ? (
+          <span className="pin-badge is-reel"><Play size={9} weight="fill" /></span>
+        ) : null}
+      </span>
+      <span className="pin-label" aria-hidden={!selected}>{s.name}</span>
+    </>
+  );
 }
 
 export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref) {
@@ -89,33 +89,33 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const ready = useRef(false);
-  const markers = useRef(new Map<string, { m: maplibregl.Marker; el: HTMLElement }>());
+  const markers = useRef(new Map<string, { m: maplibregl.Marker; el: HTMLButtonElement; root: Root }>());
   const meMarker = useRef<maplibregl.Marker | null>(null);
   const latest = useRef(props);
   latest.current = props;
+
+  const offset = (): [number, number] => [0, -Math.round(latest.current.bottomInset / 2)];
 
   useImperativeHandle(ref, () => ({
     center() {
       const c = mapRef.current!.getCenter();
       return { lat: c.lat, lng: c.lng };
     },
-    flyTo(p, zoom = 16) {
-      mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom, speed: 1.2, curve: 1.4, essential: true, offset: [0, -Math.round((el.current?.clientHeight ?? 800) * 0.22)] });
+    flyTo(p, zoom = 15.8) {
+      mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom, speed: 1.2, curve: 1.4, essential: true, offset: offset() });
     },
-    /** The one choreographed moment: camera arcs in, then the sticker slaps down onto the map. */
-    celebrate(spotId, at) {
+    fit(points) {
+      const map = mapRef.current;
+      if (!map || !points.length) return;
+      if (points.length === 1) return void map.flyTo({ center: [points[0].lng, points[0].lat], zoom: 15, offset: offset(), essential: true });
+      const b = new maplibregl.LngLatBounds();
+      for (const p of points) b.extend([p.lng, p.lat]);
+      map.fitBounds(b, { padding: { top: 170, left: 50, right: 50, bottom: latest.current.bottomInset + 40 }, maxZoom: 15.5, duration: 900, essential: true });
+    },
+    celebrate(at) {
       const map = mapRef.current;
       if (!map) return;
-      map.flyTo({ center: [at.lng, at.lat], zoom: 16.4, pitch: PITCH_3D + 5, bearing: map.getBearing() + 25, duration: 1800, essential: true, offset: [0, -120] });
-      const land = () => {
-        const mk = markers.current.get(spotId);
-        if (!mk) return;
-        mk.el.classList.remove('is-landing');
-        void mk.el.offsetWidth;
-        mk.el.classList.add('is-landing');
-        setTimeout(() => mk.el.classList.remove('is-landing'), 1400);
-      };
-      setTimeout(land, 1500);
+      map.flyTo({ center: [at.lng, at.lat], zoom: 16.4, pitch: PITCH_3D + 6, bearing: map.getBearing() + 25, duration: 1600, essential: true, offset: offset() });
     },
     set3D(on) {
       mapRef.current?.easeTo({ pitch: on ? PITCH_3D : 0, bearing: on ? -17 : 0, duration: 900 });
@@ -149,9 +149,7 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
     map.on('load', () => {
       if (cancelled) return;
       const firstSymbol = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
-      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.28, position: [1.5, 190, 40] });
-
-      // Soft white 3D city: buildings rise as you zoom in, shaded only by light.
+      map.setLight({ anchor: 'viewport', color: '#ffffff', intensity: 0.26, position: [1.5, 190, 40] });
       map.addLayer(
         {
           id: 'buildings-3d',
@@ -163,31 +161,12 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
             'fill-extrusion-color': MAP.building,
             'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 14.5, ['coalesce', ['get', 'render_height'], 9]],
             'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.92,
+            'fill-extrusion-opacity': 0.94,
             'fill-extrusion-vertical-gradient': true,
           },
         },
         firstSymbol,
       );
-
-      // A warm pool of light on the ground under every spot you've eaten at.
-      map.addSource('glow', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer(
-        {
-          id: 'glow',
-          type: 'circle',
-          source: 'glow',
-          paint: {
-            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 11, 8, 17, 64],
-            'circle-color': '#F2B01E',
-            'circle-opacity': 0.35,
-            'circle-blur': 0.9,
-            'circle-pitch-alignment': 'map',
-          },
-        },
-        'buildings-3d',
-      );
-
       restyle(map);
       ready.current = true;
       sync();
@@ -195,10 +174,14 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
       if (latest.current.home) map.easeTo({ zoom: 13.6, pitch: PITCH_3D, bearing: -17, duration: 2200, essential: true });
     });
     map.on('move', syncCamera);
+    map.on('click', () => latest.current.onBackground());
 
     return () => {
       cancelled = true;
-      for (const { m } of markers.current.values()) m.remove();
+      for (const { m, root } of markers.current.values()) {
+        m.remove();
+        setTimeout(() => root.unmount());
+      }
       markers.current.clear();
       map.remove();
       mapRef.current = null;
@@ -215,30 +198,33 @@ export const MapView = forwardRef<MapHandle, Props>(function MapView(props, ref)
       seen.add(s.id);
       let mk = markers.current.get(s.id);
       if (!mk) {
-        const node = stickerEl(s);
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = 'pin is-new';
         node.addEventListener('click', (e) => {
           e.stopPropagation();
           latest.current.onSpot(s.id);
         });
-        const m = new maplibregl.Marker({ element: node, anchor: 'center' }).setLngLat([s.lng, s.lat]).addTo(map);
-        mk = { m, el: node };
+        setTimeout(() => node.classList.remove('is-new'), 600);
+        const root = createRoot(node);
+        const m = new maplibregl.Marker({ element: node, anchor: 'bottom' }).setLngLat([s.lng, s.lat]).addTo(map);
+        mk = { m, el: node, root };
         markers.current.set(s.id, mk);
       }
-      paint(mk.el, s, s.id === selected);
-      mk.el.style.zIndex = s.id === selected ? '5' : s.state === 'collected' ? '2' : '1';
+      const isSel = s.id === selected;
+      mk.el.dataset.state = s.state;
+      mk.el.classList.toggle('is-selected', isSel);
+      mk.el.setAttribute('aria-label', s.name);
+      mk.el.style.zIndex = isSel ? '5' : s.state === 'collected' ? '2' : '1';
+      mk.root.render(<Pin s={s} selected={isSel} />);
     }
     for (const [id, mk] of markers.current) {
       if (!seen.has(id)) {
         mk.m.remove();
+        setTimeout(() => mk.root.unmount());
         markers.current.delete(id);
       }
     }
-    (map.getSource('glow') as GeoJSONSource).setData({
-      type: 'FeatureCollection',
-      features: spots
-        .filter((s) => s.state === 'collected')
-        .map((s) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [s.lng, s.lat] } })),
-    });
   }
 
   useEffect(sync, [props.spots, props.selected]);

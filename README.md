@@ -1,6 +1,6 @@
 # CheckPoint Maps
 
-A gamified food map. Every place you eat becomes an illustrated sticker on a 3D daylight map of your city, moves a food trail along, and adds to your dish list. Spots from food creators' YouTube and Instagram videos show up as pink "to try" pins and creator trails. See [BRIEF.md](BRIEF.md) for the product brief.
+A gamified food map. Spots you've eaten at and spots from creators' videos show as picture pins on a 3D daylight map, with a swipeable card for each. Every meal adds to your collection, trails, dishes and diary. Spots from food creators' YouTube and Instagram videos show up as pink "to try" pins and creator trails. See [BRIEF.md](BRIEF.md) for the product brief.
 
 ## Run
 
@@ -30,10 +30,17 @@ Open the printed URL on your phone (same Wi-Fi; the server listens on your LAN).
 
 - `src/lib/game.ts` — all game rules: dish→cuisine map, collections, badges, streak, reward diff. Edit seed trails here.
 - `src/lib/geo.ts` — distance, GPS, H3 cell id per spot.
-- `src/lib/stickers.ts` — the 12 food sticker illustrations and how a spot picks one.
+- `src/lib/stickers.ts` — food categories (tile colour, glyph) and how a spot picks one.
+- `src/lib/vt.ts` — View Transitions wrapper for page and card-to-spot morphs.
 - `src/lib/osm.ts` — nearby food spots from OpenStreetMap Overpass (with fallback servers).
 - `src/lib/db.ts` — IndexedDB stores mirroring the brief's data model (`spots`, `checkins`, `meta`).
 - `src/lib/share.ts` — share-card canvas renderer.
 - `src/lib/video.ts` — YouTube / Instagram link parsing and embeds.
 - `src/styles.css` — design tokens at the top. Rules and palette are in [DESIGN.md](DESIGN.md).
-- `src/components/` — map, bottom sheet, check-in, panels (explore, collection, diary, spot detail, reward, onboarding).
+- `src/components/` — map and pins, screens (map chrome, card carousel, nav, spot, collection, diary), modals (check-in, reward, video, add video, menu, onboarding).
+
+## Credits
+
+- Icons: [Phosphor Icons](https://phosphoricons.com) (MIT).
+- Fonts: Instrument Serif and Onest from Google Fonts (OFL).
+- Map: OpenFreeMap tiles, OpenStreetMap data.

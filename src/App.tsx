@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MapPin } from '@phosphor-icons/react';
 import { MapView, type MapHandle, type MapSpot } from './components/MapView';
 import { CheckIn } from './components/CheckIn';
-import { Icon } from './components/Icon';
-import { Sheet, type Detent } from './components/Sheet';
 import {
-  AddVideo, CollectionView, DiaryView, ExploreView, Onboarding, Reward, SpotDetail, Sticker, VideoSheet, type ToTry, type VideoDraft,
-} from './components/Panels';
+  Carousel, Chips, CollectionPage, DiaryPage, EmptyCard, MapControls, Nav, SpotPage, TopBar,
+  type Filter, type SpotVM, type Tab,
+} from './components/Screens';
+import { AddVideo, Menu, Onboarding, Reward, SharePreview, VideoSheet, type VideoDraft } from './components/Modals';
 import { deleteVideos, loadAll, resetAll, saveCheckIn, saveHome, saveVideos, uid } from './lib/db';
 import { cellFor, distanceM, getPosition } from './lib/geo';
-import { computeState, diffState, type RewardDiff } from './lib/game';
+import { computeState, diffState, normDish, type RewardDiff } from './lib/game';
+import { blobUrl } from './lib/image';
 import { drawShareCard, shareOrDownload, type ShareInput } from './lib/share';
-import { stickerFor, type StickerKey } from './lib/stickers';
+import { stickerFor } from './lib/stickers';
+import { thumbUrl } from './lib/video';
+import { transition } from './lib/vt';
 import type { CheckIn as CheckInT, Home, LatLng, Spot, SpotKind, Video } from './lib/types';
 
-type View = 'explore' | 'collection' | 'diary';
-const VIEWS: [View, string][] = [['explore', 'Explore'], ['collection', 'Collection'], ['diary', 'Diary']];
+const BOTTOM_UI = 300; // carousel + nav, so the camera centres spots above them
 
 /** A clearly labelled sample creator trail around home, so the creator layer can be tried before real links exist. */
 function demoTrail(home: Home): { spots: Spot[]; videos: Video[] } {
@@ -37,28 +40,36 @@ function demoTrail(home: Home): { spots: Spot[]; videos: Video[] } {
   return { spots, videos };
 }
 
+type Picking = { mode: 'video'; draft: VideoDraft; name: string; kind: SpotKind } | { mode: 'home' };
+
 export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [home, setHome] = useState<Home | null>(null);
   const [spotList, setSpotList] = useState<Spot[]>([]);
   const [checkins, setCheckins] = useState<CheckInT[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [view, setView] = useState<View>('explore');
-  const [detent, setDetent] = useState<Detent>('peek');
+
+  const [tab, setTab] = useState<Tab>('map');
+  const [page, setPage] = useState<string | null>(null); // open spot page
+  const [heroId, setHeroId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
+
   const [me, setMe] = useState<LatLng | null>(null);
+  const [is3D, setIs3D] = useState(true);
+  const [bearing, setBearing] = useState(-17);
+
   const [checkingIn, setCheckingIn] = useState<{ preset: Spot | null } | null>(null);
   const [reward, setReward] = useState<{ diff: RewardDiff; spot: Spot; checkin: CheckInT } | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
   const [share, setShare] = useState<{ url: string; blob: Blob } | null>(null);
+  const [addingVideo, setAddingVideo] = useState(false);
+  const [picking, setPicking] = useState<Picking | null>(null);
+  const [playing, setPlaying] = useState<Video | null>(null);
+  const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [onboardBusy, setOnboardBusy] = useState(false);
   const [onboardErr, setOnboardErr] = useState<string | null>(null);
-  const [addingVideo, setAddingVideo] = useState(false);
-  const [picking, setPicking] = useState<{ draft: VideoDraft; name: string; kind: SpotKind } | null>(null);
-  const [playing, setPlaying] = useState<Video | null>(null);
-  const [is3D, setIs3D] = useState(true);
-  const [bearing, setBearing] = useState(-17);
-  const [menuOpen, setMenuOpen] = useState(false);
   const mapRef = useRef<MapHandle>(null);
 
   useEffect(() => {
@@ -77,43 +88,61 @@ export default function App() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  /* ───────── Derived ───────── */
+
   const spots = useMemo(() => new Map(spotList.map((s) => [s.id, s])), [spotList]);
   const state = useMemo(() => computeState(home, spots, checkins, videos), [home, spots, checkins, videos]);
-  const dishesBySpot = useMemo(() => new Map(state.collected.map((c) => [c.spotId, c.dishes])), [state]);
-  const stickerOf = useCallback(
-    (id: string): StickerKey => {
-      const s = spots.get(id);
-      return s ? stickerFor(s, dishesBySpot.get(id) ?? []) : 'thali';
-    },
-    [spots, dishesBySpot],
-  );
-  const numberOf = (id: string) => {
-    const i = state.collected.findIndex((c) => c.spotId === id);
-    return i < 0 ? null : i + 1;
-  };
   const origin: LatLng | null = me ?? home;
 
-  const mapSpots = useMemo<MapSpot[]>(() => {
-    const n = new Map<string, number>();
-    for (const c of checkins) n.set(c.spotId, (n.get(c.spotId) ?? 0) + 1);
-    const vc = new Map<string, number>();
-    for (const v of videos) vc.set(v.spotId, (vc.get(v.spotId) ?? 0) + 1);
+  const vms = useMemo<SpotVM[]>(() => {
+    const visits = new Map<string, CheckInT[]>();
+    for (const c of [...checkins].sort((a, b) => a.createdAt - b.createdAt)) visits.set(c.spotId, [...(visits.get(c.spotId) ?? []), c]);
+    const vids = new Map<string, Video[]>();
+    for (const v of videos) vids.set(v.spotId, [...(vids.get(v.spotId) ?? []), v]);
+    const numbers = new Map(state.collected.map((c, i) => [c.spotId, i + 1]));
     return spotList
-      .filter((s) => n.has(s.id) || vc.has(s.id))
-      .map((s) => ({ ...s, visits: n.get(s.id) ?? 0, videos: vc.get(s.id) ?? 0, state: n.has(s.id) ? 'collected' : 'totry', sticker: stickerOf(s.id) }));
-  }, [spotList, checkins, videos, stickerOf]);
+      .filter((s) => visits.has(s.id) || vids.has(s.id))
+      .map((s) => {
+        const vs = visits.get(s.id) ?? [];
+        const vv = vids.get(s.id) ?? [];
+        const photo = [...vs].reverse().find((c) => c.photo)?.photo;
+        const thumb = vv.map(thumbUrl).find(Boolean) ?? null;
+        return {
+          spot: s,
+          sticker: stickerFor(s, vs.flatMap((c) => c.dishes)),
+          image: photo ? blobUrl(photo) : thumb,
+          state: vs.length ? 'collected' : 'totry',
+          videos: vv,
+          visits: vs,
+          number: numbers.get(s.id) ?? null,
+          distance: origin ? distanceM(origin, s) : null,
+          creators: [...new Set(vv.map((v) => v.creator))],
+        } satisfies SpotVM;
+      });
+  }, [spotList, checkins, videos, state, origin]);
+  const vmById = useMemo(() => new Map(vms.map((v) => [v.spot.id, v])), [vms]);
 
-  const toTry = useMemo<ToTry[]>(() => {
-    return mapSpots
-      .filter((s) => s.state === 'totry')
-      .map((s) => ({
-        spot: spots.get(s.id)!,
-        sticker: s.sticker,
-        creators: [...new Set(videos.filter((v) => v.spotId === s.id).map((v) => v.creator))],
-        distance: origin ? distanceM(origin, s) : null,
-      }))
+  const counts = useMemo<Record<Filter, number>>(() => ({
+    all: vms.length,
+    totry: vms.filter((v) => v.state === 'totry').length,
+    collected: vms.filter((v) => v.state === 'collected').length,
+    reels: vms.filter((v) => v.videos.length).length,
+  }), [vms]);
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return vms
+      .filter((v) => filter === 'all' || (filter === 'reels' ? v.videos.length > 0 : v.state === filter))
+      .filter((v) => !q || v.spot.name.toLowerCase().includes(q) || v.creators.some((c) => c.includes(q)) || v.visits.some((c) => c.dishes.some((d) => normDish(d).includes(q))))
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
-  }, [mapSpots, spots, videos, origin]);
+  }, [vms, filter, query]);
+
+  const mapSpots = useMemo<MapSpot[]>(
+    () => shown.map((v) => ({ ...v.spot, visits: v.visits.length, videos: v.videos.length, state: v.state, sticker: v.sticker, image: v.image })),
+    [shown],
+  );
+
+  /* ───────── Actions ───────── */
 
   const setHomeAt = async (p: LatLng) => {
     const h: Home = { lat: p.lat, lng: p.lng, radiusKm: 6, setAt: Date.now() };
@@ -129,14 +158,35 @@ export default function App() {
         setMe(p);
         return setHomeAt(p);
       })
-      .catch((e: Error) => setOnboardErr(`${e.message} Move the map to your city, then choose “Use the city on the map”.`))
+      .catch((e: Error) => setOnboardErr(`${e.message} Choose your city on the map instead.`))
       .finally(() => setOnboardBusy(false));
   };
 
-  const openSpot = (s: Spot) => {
-    setSelected(s.id);
-    setDetent('half');
-    mapRef.current?.flyTo(s, 16.2);
+  const focusSpot = useCallback((id: string) => {
+    setSelected(id);
+    const s = spots.get(id);
+    if (s) mapRef.current?.flyTo(s);
+  }, [spots]);
+
+  const openSpot = (vm: SpotVM) => {
+    setSelected(vm.spot.id);
+    setHeroId(vm.spot.id);
+    requestAnimationFrame(() => transition(() => setPage(vm.spot.id), 'push'));
+    mapRef.current?.flyTo(vm.spot);
+  };
+
+  const closeSpot = () => transition(() => setPage(null), 'pop');
+
+  const changeTab = (t: Tab) => {
+    if (t === tab && !page) return;
+    transition(() => { setPage(null); setTab(t); }, 'tab');
+  };
+
+  const changeFilter = (f: Filter) => {
+    setFilter(f);
+    setSelected(null);
+    const pts = vms.filter((v) => f === 'all' || (f === 'reels' ? v.videos.length > 0 : v.state === f)).map((v) => v.spot);
+    mapRef.current?.fit(pts);
   };
 
   const onSave = async (spot: Spot, c: CheckInT) => {
@@ -153,11 +203,14 @@ export default function App() {
     setSpotList([...nextSpots.values()]);
     setCheckins(nextCheckins);
     setCheckingIn(null);
-    setSelected(null);
-    setDetent('peek');
+    setPage(null);
+    setTab('map');
+    setFilter('all');
+    setQuery('');
+    setSelected(spot.id);
     const diff = diffState(before, after, spot);
-    setTimeout(() => mapRef.current?.celebrate(spot.id, spot), 60);
-    setTimeout(() => setReward({ diff, spot, checkin: c }), 2700);
+    setTimeout(() => mapRef.current?.celebrate(spot), 80);
+    setTimeout(() => setReward({ diff, spot, checkin: c }), 1700);
   };
 
   const addVideo = async (draft: VideoDraft, spot: Spot, isNew: boolean) => {
@@ -170,35 +223,45 @@ export default function App() {
     setVideos((l) => [...l, v]);
     setAddingVideo(false);
     setPicking(null);
-    openSpot(spot);
+    setTab('map');
+    setPage(null);
+    setFilter('all');
+    focusSpot(spot.id);
     setToast(`Added. ${spot.name} is on your map to try.`);
   };
 
-  const placeHere = () => {
+  const confirmPick = () => {
     if (!picking) return;
     const p = mapRef.current!.center();
+    if (picking.mode === 'home') {
+      setPicking(null);
+      setHomeAt(p).then(() => setToast('Your city is set. Add a creator’s video or check in to start.'));
+      return;
+    }
     const s: Spot = { id: `user:${uid()}`, name: picking.name, ...p, cell: cellFor(p), source: 'user', kind: picking.kind, cuisines: [], createdAt: Date.now() };
     addVideo(picking.draft, s, true);
   };
 
   const loadDemo = async () => {
-    setMenuOpen(false);
+    setMenu(false);
     if (!home) return;
     if (videos.some((v) => v.demo)) return setToast('The demo spots are already on your map.');
     const d = demoTrail(home);
     await saveVideos(d.spots, d.videos);
     setSpotList((l) => [...l, ...d.spots]);
     setVideos((l) => [...l, ...d.videos]);
-    setView('explore');
-    setDetent('half');
+    setTab('map');
+    setFilter('all');
+    setTimeout(() => mapRef.current?.fit(d.spots), 50);
     setToast('Added 5 demo spots from @demo_foodie.');
   };
 
   const removeDemo = async () => {
-    setMenuOpen(false);
+    setMenu(false);
     await deleteVideos(videos.filter((v) => v.demo).map((v) => v.id));
     setVideos((l) => l.filter((v) => !v.demo));
     setSelected(null);
+    setPage(null);
     setToast('Removed the demo spots.');
   };
 
@@ -219,131 +282,73 @@ export default function App() {
     setShare(null);
   };
 
-  const sel = selected ? spots.get(selected) : null;
+  const locateMe = () => getPosition().then((p) => { setMe(p); mapRef.current?.flyTo(p, 15.5); }).catch((e: Error) => setToast(e.message));
+
+  /* ───────── Render ───────── */
 
   if (!loaded) return <div className="boot" />;
 
-  const sheetHeader = sel ? null : (
-    <div className="sheet-top">
-      <button className="btn primary block big" onClick={() => setCheckingIn({ preset: null })}>
-        <Icon name="plus" size={20} /> I ate here
-      </button>
-      <div className="seg" role="tablist" aria-label="Sections">
-        {VIEWS.map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={view === v} onClick={() => { setView(v); if (detent === 'peek') setDetent('half'); }}>
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  const pageVm = page ? vmById.get(page) : undefined;
+  const onMap = !!home && !picking && tab === 'map' && !pageVm;
 
   return (
-    <div className="app">
+    <div className="app" data-mode={onMap ? 'map' : picking ? 'pick' : 'page'}>
       <MapView
         ref={mapRef}
         home={home}
         spots={mapSpots}
         selected={selected}
         me={me}
-        onSpot={(id) => { const s = spots.get(id); if (s) openSpot(s); }}
+        bottomInset={BOTTOM_UI}
+        onSpot={focusSpot}
+        onBackground={() => setSelected(null)}
         onCamera={(b, p) => { setBearing(b); setIs3D(p > 15); }}
       />
 
+      {onMap && (
+        <>
+          <div className="map-top">
+            <TopBar query={query} onQuery={(q) => { setQuery(q); setSelected(null); }} onMenu={() => setMenu(true)} />
+            {vms.length > 0 && <Chips filter={filter} counts={counts} onFilter={changeFilter} />}
+          </div>
+          <MapControls is3D={is3D} bearing={bearing} onLocate={locateMe} on3D={() => mapRef.current?.set3D(!is3D)} onNorth={() => mapRef.current?.resetNorth()} />
+          <Carousel
+            items={shown}
+            selected={selected}
+            heroId={heroId}
+            onFocus={focusSpot}
+            onOpen={openSpot}
+            empty={vms.length ? (
+              <article className="scard is-empty"><h3>No matches</h3><p>Nothing on your map fits “{query || filter}”. Clear the search or pick another filter.</p></article>
+            ) : (
+              <EmptyCard onAddVideo={() => setAddingVideo(true)} onDemo={loadDemo} />
+            )}
+          />
+        </>
+      )}
+
+      {home && !picking && tab === 'collection' && !pageVm && (
+        <CollectionPage state={state} items={vms} onOpen={openSpot} onShare={() => openShare({ kind: 'progress', stickers: state.collected.map((c) => vmById.get(c.spotId)?.sticker ?? 'thali') })} />
+      )}
+      {home && !picking && tab === 'diary' && !pageVm && <DiaryPage checkins={checkins} vmOf={(id) => vmById.get(id)} onOpen={openSpot} />}
+      {pageVm && <SpotPage vm={pageVm} onBack={closeSpot} onCheckIn={() => setCheckingIn({ preset: pageVm.spot })} onPlay={setPlaying} />}
+
+      {home && !picking && !pageVm && <Nav tab={tab} onTab={changeTab} onCheckIn={() => setCheckingIn({ preset: null })} />}
+
       {picking && (
         <>
-          <svg className="crosshair" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s-7-6.2-7-11.5A7 7 0 0 1 19 10.5C19 15.8 12 22 12 22Z" fill="#E0452B" stroke="#fff" strokeWidth="1.5" /><circle cx="12" cy="10" r="2.6" fill="#fff" /></svg>
+          <span className="crosshair" aria-hidden="true"><MapPin size={44} weight="fill" /></span>
           <div className="pickbar">
-            <p>Move the map until the pin sits on <b>{picking.name}</b>.</p>
-            <div className="actions">
-              <button className="btn secondary" onClick={() => { setPicking(null); setAddingVideo(true); }}>Back</button>
-              <button className="btn primary grow" onClick={placeHere}>Place it here</button>
+            <p>{picking.mode === 'home' ? <>Move the map to your city.</> : <>Move the map until the pin sits on <b>{picking.name}</b>.</>}</p>
+            <div className="dock static">
+              <button className="pill outline" onClick={() => { const m = picking.mode; setPicking(null); if (m === 'video') setAddingVideo(true); }}>Back</button>
+              <button className="pill dark grow" onClick={confirmPick}>{picking.mode === 'home' ? 'Set as my city' : 'Place it here'}</button>
             </div>
           </div>
         </>
       )}
 
-      {home && !picking && (
-        <>
-          <button className="count-chip" onClick={() => { setSelected(null); setView('collection'); setDetent('half'); }}>
-            <span className="count-stack" aria-hidden="true">
-              {(state.collected.length ? state.collected.slice(-3).map((c) => ({ id: c.spotId, k: stickerOf(c.spotId) })) : [{ id: 'empty', k: 'thali' as StickerKey }]).map(({ id, k }) => (
-                <Sticker key={id} k={k} size={26} ghost={!state.collected.length} />
-              ))}
-            </span>
-            <b>{state.spotsVisited}</b> collected
-            {toTry.length > 0 && <span className="count-try">{toTry.length} to try</span>}
-          </button>
-
-          <div className="controls">
-            <div className="ctl-group">
-              <button aria-label="Show my location" onClick={() => getPosition().then((p) => { setMe(p); mapRef.current?.flyTo(p, 15.5); }).catch((e: Error) => setToast(e.message))}>
-                <Icon name="locate" />
-              </button>
-              <button aria-label={is3D ? 'Switch to 2D map' : 'Switch to 3D map'} onClick={() => mapRef.current?.set3D(!is3D)} className="ctl-text">
-                {is3D ? '2D' : '3D'}
-              </button>
-              {Math.abs(bearing) > 2 && (
-                <button aria-label="Point the map north" onClick={() => mapRef.current?.resetNorth()}>
-                  <span style={{ display: 'grid', transform: `rotate(${-bearing}deg)` }}><Icon name="compass" fill /></span>
-                </button>
-              )}
-            </div>
-            <div className="ctl-group">
-              <button aria-label="More options" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}><Icon name="more" /></button>
-            </div>
-            {menuOpen && (
-              <div className="menu">
-                <button onClick={() => { setMenuOpen(false); setAddingVideo(true); }}>Add a creator’s video</button>
-                {videos.some((v) => v.demo)
-                  ? <button onClick={removeDemo}>Remove demo spots</button>
-                  : <button onClick={loadDemo}>Add demo spots</button>}
-                <button onClick={() => { setMenuOpen(false); const c = mapRef.current?.center(); if (c) setHomeAt(c).then(() => setToast('Your city is now centred here.')); }}>
-                  Set my city to this area
-                </button>
-                <button
-                  className="danger"
-                  onClick={async () => {
-                    setMenuOpen(false);
-                    if (confirm('Delete every check-in, spot, video and your city from this phone? This can’t be undone.')) {
-                      await resetAll();
-                      location.reload();
-                    }
-                  }}
-                >
-                  Delete all my data
-                </button>
-              </div>
-            )}
-          </div>
-
-          <Sheet detent={detent} onDetent={setDetent} header={sheetHeader}>
-            {sel ? (
-              <SpotDetail
-                spot={sel}
-                sticker={stickerOf(sel.id)}
-                number={numberOf(sel.id)}
-                visits={checkins.filter((c) => c.spotId === sel.id)}
-                videos={videos.filter((v) => v.spotId === sel.id)}
-                distance={origin ? distanceM(origin, sel) : null}
-                onBack={() => { setSelected(null); setDetent('peek'); }}
-                onCheckIn={() => setCheckingIn({ preset: sel })}
-                onPlay={setPlaying}
-              />
-            ) : view === 'explore' ? (
-              <ExploreView toTry={toTry} creatorTrails={state.trails.filter((t) => t.kind === 'creator')} onOpen={openSpot} onAdd={() => setAddingVideo(true)} />
-            ) : view === 'collection' ? (
-              <CollectionView state={state} spots={spots} stickerOf={stickerOf} onOpen={openSpot} onShare={() => openShare({ kind: 'progress', stickers: state.collected.map((c) => stickerOf(c.spotId)) })} />
-            ) : (
-              <DiaryView checkins={checkins} spots={spots} stickerOf={stickerOf} onOpen={openSpot} />
-            )}
-          </Sheet>
-        </>
-      )}
-
-      {!home && (
-        <Onboarding busy={onboardBusy} error={onboardErr} onGps={onboardGps} onMapCentre={() => { const c = mapRef.current?.center(); if (c) setHomeAt(c); }} />
-      )}
+      {!home && !picking && <Onboarding busy={onboardBusy} error={onboardErr} onGps={onboardGps} onMapCentre={() => setPicking({ mode: 'home' })} />}
 
       {checkingIn && (
         <CheckIn
@@ -356,57 +361,62 @@ export default function App() {
           onClose={() => setCheckingIn(null)}
         />
       )}
-
       {addingVideo && (
         <AddVideo
           spots={spotList}
           onExisting={(d, s) => addVideo(d, s, false)}
-          onPickNew={(draft, name, kind) => { setAddingVideo(false); setSelected(null); setPicking({ draft, name, kind }); }}
+          onPickNew={(draft, name, kind) => { setAddingVideo(false); setPage(null); setTab('map'); setPicking({ mode: 'video', draft, name, kind }); }}
           onClose={() => setAddingVideo(false)}
         />
       )}
-
       {playing && (
         <VideoSheet
           video={playing}
           spot={spots.get(playing.spotId)}
           collected={state.visitedSpots.has(playing.spotId)}
           onClose={() => setPlaying(null)}
-          onShowOnMap={() => { const s = spots.get(playing.spotId); setPlaying(null); if (s) openSpot(s); }}
+          onShowOnMap={() => { const id = playing.spotId; setPlaying(null); transition(() => { setPage(null); setTab('map'); }, 'pop'); setTimeout(() => focusSpot(id), 50); }}
         />
       )}
-
+      {menu && (
+        <Menu
+          hasDemo={videos.some((v) => v.demo)}
+          onAddVideo={() => { setMenu(false); setAddingVideo(true); }}
+          onDemo={loadDemo}
+          onRemoveDemo={removeDemo}
+          onSetCity={() => { setMenu(false); setPicking({ mode: 'home' }); }}
+          onReset={async () => {
+            setMenu(false);
+            if (confirm('Delete every check-in, spot, video and your city from this phone? This can’t be undone.')) {
+              await resetAll();
+              location.reload();
+            }
+          }}
+          onClose={() => setMenu(false)}
+        />
+      )}
       {reward && (
         <Reward
           diff={reward.diff}
           spot={reward.spot}
-          sticker={stickerOf(reward.spot.id)}
+          sticker={vmById.get(reward.spot.id)?.sticker ?? stickerFor(reward.spot, reward.checkin.dishes)}
+          image={vmById.get(reward.spot.id)?.image ?? null}
           videos={videos.filter((v) => v.spotId === reward.spot.id)}
           onClose={() => setReward(null)}
           onShare={() => {
             const r = reward;
             setReward(null);
-            openShare({ kind: 'checkin', spot: r.spot, checkin: r.checkin, sticker: stickerOf(r.spot.id), number: r.diff.number ?? numberOf(r.spot.id) });
+            openShare({ kind: 'checkin', spot: r.spot, checkin: r.checkin, sticker: vmById.get(r.spot.id)?.sticker ?? 'thali', number: r.diff.number ?? vmById.get(r.spot.id)?.number ?? null });
           }}
         />
       )}
-
       {share && (
-        <div className="modal-wrap" role="dialog" aria-modal="true" aria-label="Share image">
-          <button className="scrim" aria-label="Close" onClick={closeShare} />
-          <div className="modal">
-            <img className="share-img" src={share.url} alt="Your share image" />
-            <p className="v-foot">The image has no map, address or location on it.</p>
-            <div className="actions">
-              <button className="btn secondary" onClick={closeShare}>Close</button>
-              <button className="btn primary grow" onClick={() => shareOrDownload(share.blob, 'My CheckPoint').then((r) => r === 'downloaded' && setToast('Saved the image to your downloads.'))}>
-                <Icon name="share" size={18} /> Share
-              </button>
-            </div>
-          </div>
-        </div>
+        <SharePreview
+          url={share.url}
+          onClose={closeShare}
+          onShare={() => shareOrDownload(share.blob, 'My CheckPoint').then((r) => r === 'downloaded' && setToast('Saved the image to your downloads.'))}
+        />
       )}
-
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );

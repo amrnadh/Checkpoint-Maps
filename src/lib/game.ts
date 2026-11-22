@@ -250,4 +250,4 @@ export function diffState(before: GameState, after: GameState, spot: Spot): Rewa
   };
 }
 
-export const RATING_LABEL = ['😐 Meh', '🙂 Good', '🤩 Wow'] as const;
+export const RATING_LABEL = ['Meh', 'Good', 'Wow'] as const;
